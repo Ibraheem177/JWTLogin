@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+beforeEach(() => localStorage.clear());
+
+test('shows the login form when there is no saved token', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
 });
