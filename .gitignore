@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Metals (VS Code Scala/Java) ###
+.metals/
+.bloop/
