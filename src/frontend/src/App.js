@@ -1,24 +1,20 @@
-import logo from './logo.svg';
+import { useState } from 'react';
 import './App.css';
+import { getToken } from './api';
+import LoginForm from './components/LoginForm';
 
 function App() {
+  // If a token is already saved (e.g. after a page refresh) start logged in.
+  const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <main className="App">
+      {loggedIn ? (
+        <p>Logged in!</p>
+      ) : (
+        <LoginForm onLoggedIn={() => setLoggedIn(true)} />
+      )}
+    </main>
   );
 }
 
