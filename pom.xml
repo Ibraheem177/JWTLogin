@@ -48,7 +48,7 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
-		<!-- Spring Security: filter chain, password hashing, authentication -->
+		<!-- Spring Security: filter chain and access rules -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
@@ -106,4 +106,3 @@
 	</build>
 
 </project>
-

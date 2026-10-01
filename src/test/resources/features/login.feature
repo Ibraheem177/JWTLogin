@@ -24,6 +24,7 @@ Feature: Access the API using an identity provider's JWT
       | wrong audience  |
       | wrong signature |
       | malformed       |
+      | missing subject |
 
   Scenario: React can preflight the Authorization header
     When React preflights the profile endpoint

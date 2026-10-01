@@ -57,7 +57,7 @@ public abstract class JwtTestSupport {
     public static String token(String kind) throws JOSEException {
         long now = System.currentTimeMillis();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject("user-123")
+                .subject(kind.equals("missing subject") ? null : "user-123")
                 .claim("preferred_username", "alice")
                 .issuer(kind.equals("wrong issuer") ? "https://untrusted.example" : ISSUER)
                 .audience(List.of(kind.equals("wrong audience") ? "another-api" : "jwt-login-api"))

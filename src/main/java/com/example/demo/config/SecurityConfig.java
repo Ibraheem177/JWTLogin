@@ -9,7 +9,10 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.util.StringUtils;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -36,7 +39,14 @@ public class SecurityConfig {
                 // Installs Spring's BearerTokenAuthenticationFilter and JWT validation.
                 // Signature, issuer, timestamps and audience are checked before the controller.
                 .oauth2ResourceServer(oauth -> oauth
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(token -> {
+                            // A profile must identify a user; malformed issuer configuration
+                            // must produce 401 rather than a controller error.
+                            if (!StringUtils.hasText(token.getSubject())) {
+                                throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"));
+                            }
+                            return converter.convert(token);
+                        })))
                 .build();
     }
 
