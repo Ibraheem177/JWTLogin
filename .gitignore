@@ -35,3 +35,7 @@ build/
 ### Metals (VS Code Scala/Java) ###
 .metals/
 .bloop/
+
+# Local Keycloak runtime and development logs
+.local/
+
