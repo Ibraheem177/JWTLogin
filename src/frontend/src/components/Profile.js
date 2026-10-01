@@ -1,37 +1,46 @@
 import { useEffect, useState } from 'react';
-import { clearToken, fetchProfile, getToken } from '../api';
+import { fetchProfile } from '../api';
+import { login, logout } from '../auth';
 
-// Shown only when logged in. Proves the token works by calling a protected endpoint.
-function Profile({ onLoggedOut }) {
+function Profile() {
   const [profile, setProfile] = useState(null);
+  const [error, setError] = useState(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetchProfile()
-      .then(setProfile)
-      .catch((err) => {
-        // 401 = token missing, expired or tampered with -> back to the login screen
-        if (err.status === 401) {
-          clearToken();
-          onLoggedOut();
-        }
-      });
-  }, [onLoggedOut]);
+    let active = true;
+    setError(null);
+    fetchProfile().then(data => {
+      if (active) setProfile(data);
+    }).catch(err => {
+      if (active) setError(err);
+    });
+    return () => { active = false; };
+  }, [attempt]);
 
-  function handleLogout() {
-    clearToken();
-    onLoggedOut();
-  }
-
-  if (!profile) {
-    return <p>Loading...</p>;
+  async function redirect(action) {
+    try {
+      await action();
+    } catch {
+      setError(new Error('Could not reach sign-in. Please try again.'));
+    }
   }
 
   return (
     <section className="card">
-      <h1>Welcome, {profile.username}</h1>
-      <p>This data came from a protected endpoint, unlocked by your JWT:</p>
-      <p className="token">{getToken()}</p>
-      <button type="button" onClick={handleLogout}>Log out</button>
+      <h1>{profile ? `Welcome, ${profile.username}` : 'Your profile'}</h1>
+      {!profile && !error && <p>Loading your profile...</p>}
+      {profile && <>
+        <p>Your protected profile was loaded successfully.</p>
+        <p>User ID: {profile.id}</p>
+      </>}
+      {error && <>
+        <p role="alert" className="error">{error.message}</p>
+        {error.status === 401
+          ? <button onClick={() => redirect(login)}>Sign in again</button>
+          : <button onClick={() => setAttempt(n => n + 1)}>Retry profile</button>}
+      </>}
+      <button onClick={() => redirect(logout)}>Log out</button>
     </section>
   );
 }
