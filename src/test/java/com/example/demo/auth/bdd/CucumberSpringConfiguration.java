@@ -9,6 +9,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
         "app.auth.username=test-user",
         "app.auth.password=test-password",
         "app.jwt.secret=" + CucumberSpringConfiguration.JWT_SECRET,
+        "spring.datasource.url=jdbc:h2:mem:jwtlogin-cucumber-tests;DB_CLOSE_DELAY=-1",
         "app.cors.allowed-origin=http://localhost:3000"
 })
 @AutoConfigureMockMvc

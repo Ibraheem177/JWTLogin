@@ -173,6 +173,34 @@
   transition: background-color 150ms ease, transform 150ms ease;
 }
 
+.oauth-button {
+  background: #fff;
+  border: 1px solid #dce3ee;
+  color: #263550;
+  margin-top: 0;
+}
+
+.oauth-button:hover:not(:disabled) {
+  background: #f7f9fc;
+}
+
+.login-divider {
+  align-items: center;
+  color: #8793a6;
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  background: #edf0f5;
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
 .submit-button:hover:not(:disabled) {
   background: #264fd0;
   transform: translateY(-1px);

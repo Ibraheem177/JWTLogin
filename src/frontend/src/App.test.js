@@ -1,45 +1,95 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
+import { authenticatedFetch, login, logout, oauthLogin } from './api';
+import keycloak from './keycloak';
+
+jest.mock('./api', () => ({
+  authenticatedFetch: jest.fn(),
+  login: jest.fn(),
+  logout: jest.fn(),
+  oauthLogin: jest.fn()
+}));
+
+jest.mock('./keycloak', () => ({
+  __esModule: true,
+  default: {
+    token: '',
+    tokenParsed: null
+  }
+}));
 
 beforeEach(() => {
-  localStorage.clear();
-  global.fetch = jest.fn();
+  authenticatedFetch.mockReset();
+  login.mockReset();
+  logout.mockReset();
+  oauthLogin.mockReset();
+  keycloak.token = '';
+  keycloak.tokenParsed = null;
 });
 
-test('submits credentials and stores the returned JWT', async () => {
-  const onLoginSuccess = jest.fn();
-  global.fetch.mockResolvedValue({
+test('starts a hosted OAuth login with Keycloak', () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: /sign in with keycloak/i }));
+
+  expect(oauthLogin).toHaveBeenCalled();
+});
+
+test('uses an OAuth callback session after returning from Keycloak', async () => {
+  keycloak.token = 'oauth.access.token';
+  keycloak.tokenParsed = { preferred_username: 'alex' };
+  authenticatedFetch.mockResolvedValue({
     ok: true,
-    json: async () => ({ accessToken: 'example.jwt.token' }),
+    json: async () => ({ username: 'alex' })
   });
 
-  render(<App onLoginSuccess={onLoginSuccess} />);
-  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alex' } });
-  fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'secret' } });
-  fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  render(<App />);
 
-  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'alex', password: 'secret' }),
-  }));
-  await screen.findByRole('status');
-
-  expect(localStorage.getItem('token')).toBe('example.jwt.token');
-  expect(onLoginSuccess).toHaveBeenCalledWith('example.jwt.token');
+  expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+  expect(screen.getByText('Welcome, alex.')).toBeInTheDocument();
+  expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
 });
 
-test('shows the API error without storing a token', async () => {
-  global.fetch.mockResolvedValue({
-    ok: false,
-    json: async () => ({ message: 'Invalid username or password.' }),
+test('authenticates the login form with Keycloak and verifies API access', async () => {
+  login.mockResolvedValue('keycloak.access.token');
+  authenticatedFetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({ username: 'alex' })
   });
 
   render(<App />);
   fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alex' } });
-  fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'wrong' } });
-  fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in', exact: true }));
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.');
-  expect(localStorage.getItem('token')).toBeNull();
+  expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+  expect(login).toHaveBeenCalledWith('alex', 'secret');
+  expect(authenticatedFetch).toHaveBeenCalledWith('/api/me');
+});
+
+test('shows login errors without opening an authenticated session', async () => {
+  login.mockRejectedValue(new Error('Invalid user credentials'));
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alex' } });
+  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'wrong' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in', exact: true }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid user credentials');
+  expect(authenticatedFetch).not.toHaveBeenCalled();
+});
+
+test('shows API errors and allows the user to sign out', async () => {
+  login.mockResolvedValue('keycloak.access.token');
+  authenticatedFetch.mockResolvedValue({ ok: false, status: 401 });
+
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alex' } });
+  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in', exact: true }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The application API returned HTTP 401.');
+  fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
+  expect(logout).toHaveBeenCalled();
+  expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
 });

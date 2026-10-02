@@ -2,14 +2,24 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import keycloak from './keycloak';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<main className="login-page">Connecting to secure sign-in…</main>);
+
+keycloak.init({
+  pkceMethod: 'S256',
+  checkLoginIframe: false
+}).then(() => {
+  root.render(<App />);
+}).catch(() => {
+  root.render(
+    <main className="login-page" role="alert">
+      Unable to initialize Keycloak. Check that it is running at the configured URL and try again.
+    </main>
+  );
+});
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

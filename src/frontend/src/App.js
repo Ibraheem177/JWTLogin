@@ -1,47 +1,81 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { authenticatedFetch, login, logout, oauthLogin } from './api';
+import keycloak from './keycloak';
 import './App.css';
 
-function LoginForm({ onLoginSuccess }) {
-    const [username, setUsername] = useState('');
+function App() {
+    const [accessToken, setAccessToken] = useState(keycloak.token || '');
+    const [username, setUsername] = useState(keycloak.tokenParsed?.preferred_username || '');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+    const [loginError, setLoginError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    const [signedInAs, setSignedInAs] = useState('');
+    const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+    const [apiStatus, setApiStatus] = useState({ loading: true, error: '', user: null });
+
+    let statusMessage = 'Verifying your access with the application…';
+    if (!apiStatus.loading) {
+        statusMessage = apiStatus.error || 'Succeeded';
+    }
+
+    useEffect(() => {
+        if (!accessToken) {
+            return undefined;
+        }
+        let active = true;
+        authenticatedFetch('/api/me')
+            .then(async (response) => {
+                if (!response.ok) {
+                    throw new Error(`The application API returned HTTP ${response.status}.`);
+                }
+                const user = await response.json();
+                if (active) {
+                    setApiStatus({ loading: false, error: '', user });
+                }
+            })
+            .catch((error) => {
+                if (active) {
+                    setApiStatus({
+                        loading: false,
+                        error: error instanceof Error ? error.message : 'Unable to reach the application API.',
+                        user: null
+                    });
+                }
+            });
+        return () => {
+            active = false;
+        };
+    }, [accessToken]);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setError('');
+        setLoginError('');
         setIsLoading(true);
-
         try {
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
-            });
-            const data = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                throw new Error(data.message || data.error || 'Unable to sign in. Check your credentials and try again.');
-            }
-
-            const token = data.accessToken || data.token;
-            if (typeof token !== 'string' || token.length === 0) {
-                throw new Error('The sign-in response did not include an access token.');
-            }
-
-            localStorage.setItem('token', token);
-            setSignedInAs(username);
-            if (onLoginSuccess) {
-                onLoginSuccess(token);
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+            const token = await login(username, password);
+            setPassword('');
+            setApiStatus({ loading: true, error: '', user: null });
+            setAccessToken(token);
+        } catch (error) {
+            setLoginError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleLogout = () => {
+        logout();
+        setAccessToken('');
+        setApiStatus({ loading: true, error: '', user: null });
+    };
+
+    const handleOAuthLogin = async () => {
+        setLoginError('');
+        setIsOAuthLoading(true);
+        try {
+            await oauthLogin();
+        } catch (error) {
+            setLoginError(error instanceof Error ? error.message : 'Unable to connect to Keycloak.');
+            setIsOAuthLoading(false);
         }
     };
 
@@ -57,34 +91,44 @@ function LoginForm({ onLoginSuccess }) {
 
                 <div className="login-heading">
                     <p className="eyebrow">SECURE PORTAL</p>
-                    <h1 id="login-title">{signedInAs ? 'You’re signed in' : 'Welcome back'}</h1>
-                    <p className="subtitle">
-                        {signedInAs
-                            ? `Your account is ready, ${signedInAs}.`
-                            : 'Sign in to continue to your account.'}
-                    </p>
+                    <h1 id="login-title">{accessToken ? 'You’re signed in' : 'Welcome back'}</h1>
+                    <p className="subtitle">{accessToken ? `Welcome, ${apiStatus.user?.username || username}.` : 'Sign in to continue to your account.'}</p>
                 </div>
 
-                {signedInAs ? (
-                    <div className="success-message" role="status">
-                        <span className="success-icon" aria-hidden="true">✓</span>
-                        <span>Your session has been securely authenticated.</span>
-                    </div>
+                {accessToken ? (
+                    <>
+                        <div className={apiStatus.error ? 'error-message' : 'success-message'} role={apiStatus.error ? 'alert' : 'status'}>
+                            <span className={apiStatus.error ? 'error-icon' : 'success-icon'} aria-hidden="true">
+                                {apiStatus.error ? '!' : '✓'}
+                            </span>
+                            <span>{statusMessage}</span>
+                        </div>
+                        <button className="submit-button" type="button" onClick={handleLogout}>Sign out</button>
+                    </>
                 ) : (
-                    <form className="login-form" onSubmit={handleSubmit}>
-                        {error && (
+                    <>
+                        {loginError && (
                             <div className="error-message" role="alert">
                                 <span className="error-icon" aria-hidden="true">!</span>
-                                <span>{error}</span>
+                                <span>{loginError}</span>
                             </div>
                         )}
-
+                        <button
+                            className="submit-button oauth-button"
+                            type="button"
+                            onClick={handleOAuthLogin}
+                            disabled={isOAuthLoading}
+                        >
+                            {isOAuthLoading ? 'Connecting to Keycloak…' : 'Sign in with Keycloak'}
+                        </button>
+                        <div className="login-divider" aria-hidden="true"><span>or</span></div>
+                        <form className="login-form" onSubmit={handleSubmit}>
                         <div className="form-field">
                             <label htmlFor="username">Username</label>
                             <input
-                                type="text"
                                 id="username"
                                 name="username"
+                                type="text"
                                 autoComplete="username"
                                 placeholder="Enter your username"
                                 value={username}
@@ -93,47 +137,25 @@ function LoginForm({ onLoginSuccess }) {
                                 disabled={isLoading}
                             />
                         </div>
-
                         <div className="form-field">
-                            <div className="password-label-row">
-                                <label htmlFor="password">Password</label>
-                            </div>
-                            <div className="password-input-wrap">
-                                <input
-                                    type={isPasswordVisible ? 'text' : 'password'}
-                                    id="password"
-                                    name="password"
-                                    autoComplete="current-password"
-                                    placeholder="Enter your password"
-                                    value={password}
-                                    onChange={(event) => setPassword(event.target.value)}
-                                    required
-                                    disabled={isLoading}
-                                />
-                                <button
-                                    className="password-toggle"
-                                    type="button"
-                                    onClick={() => setIsPasswordVisible((visible) => !visible)}
-                                    aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
-                                    aria-pressed={isPasswordVisible}
-                                    disabled={isLoading}
-                                >
-                                    {isPasswordVisible ? 'Hide' : 'Show'}
-                                </button>
-                            </div>
+                            <label htmlFor="password">Password</label>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                autoComplete="current-password"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                required
+                                disabled={isLoading}
+                            />
                         </div>
-
                         <button className="submit-button" type="submit" disabled={isLoading}>
-                            {isLoading ? (
-                                <>
-                                    <span className="loading-spinner" aria-hidden="true" />
-                                    Signing in…
-                                </>
-                            ) : (
-                                <>Sign in <span aria-hidden="true">→</span></>
-                            )}
+                            {isLoading ? 'Signing in…' : <>Sign in <span aria-hidden="true">→</span></>}
                         </button>
-                    </form>
+                        </form>
+                    </>
                 )}
 
                 <div className="security-note">
@@ -149,4 +171,4 @@ function LoginForm({ onLoginSuccess }) {
     );
 }
 
-export default LoginForm;
+export default App;

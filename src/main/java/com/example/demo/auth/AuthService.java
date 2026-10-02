@@ -2,13 +2,13 @@ package com.example.demo.auth;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
@@ -18,39 +18,38 @@ public class AuthService {
     private static final String JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
-    private final String configuredUsername;
-    private final String configuredPassword;
-    private final byte[] signingKey;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final SecretKey signingKey;
     private final long expirationSeconds;
     private final ObjectMapper objectMapper;
 
     public AuthService(
-            @Value("${app.auth.username:}") String configuredUsername,
-            @Value("${app.auth.password:}") String configuredPassword,
-            @Value("${app.jwt.secret:}") String jwtSecret,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            SecretKey signingKey,
             @Value("${app.jwt.expiration-seconds:3600}") long expirationSeconds,
             ObjectMapper objectMapper) {
-        this.configuredUsername = configuredUsername;
-        this.configuredPassword = configuredPassword;
-        this.signingKey = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.signingKey = signingKey;
         this.expirationSeconds = expirationSeconds;
         this.objectMapper = objectMapper;
     }
 
     public boolean isConfigured() {
-        return !configuredUsername.isBlank()
-                && !configuredPassword.isBlank()
-                && signingKey.length >= 32
+        return signingKey.getEncoded().length >= 32
                 && expirationSeconds > 0;
     }
 
+    public long getExpirationSeconds() {
+        return expirationSeconds;
+    }
+
     public boolean hasValidCredentials(String username, String password) {
-        return MessageDigest.isEqual(
-                    configuredUsername.getBytes(StandardCharsets.UTF_8),
-                    username.getBytes(StandardCharsets.UTF_8))
-                && MessageDigest.isEqual(
-                    configuredPassword.getBytes(StandardCharsets.UTF_8),
-                    password.getBytes(StandardCharsets.UTF_8));
+        return userRepository.findByUsername(username)
+                .map(user -> passwordEncoder.matches(password, user.getPasswordHash()))
+                .orElse(false);
     }
 
     public String createToken(String username) {
@@ -58,7 +57,9 @@ public class AuthService {
             Instant issuedAt = Instant.now();
             String header = encode(JWT_HEADER.getBytes(StandardCharsets.UTF_8));
             String payload = encode(objectMapper.writeValueAsBytes(Map.of(
+                    "iss", "jwt-login-local",
                     "sub", username,
+                    "preferred_username", username,
                     "iat", issuedAt.getEpochSecond(),
                     "exp", issuedAt.plusSeconds(expirationSeconds).getEpochSecond())));
             String signingInput = header + "." + payload;
@@ -71,7 +72,7 @@ public class AuthService {
     private byte[] sign(String signingInput) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(new SecretKeySpec(signingKey, HMAC_ALGORITHM));
+            mac.init(signingKey);
             return mac.doFinal(signingInput.getBytes(StandardCharsets.US_ASCII));
         } catch (java.security.GeneralSecurityException exception) {
             throw new IllegalStateException("Could not sign the authentication token.", exception);

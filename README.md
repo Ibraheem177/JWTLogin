@@ -1,45 +1,80 @@
 # JWT login demo
 
-The Spring Boot backend exposes `POST /api/login`. It checks the configured
-single user and returns a signed HS256 JWT in an `accessToken` property, which
-matches the frontend login form. No user database is configured.
+The React frontend supports both backend-user and Keycloak authentication:
 
-For local development, the default login is `test` / `password`. Override it
-with these environment variables as needed:
+- **Sign in with Keycloak** uses OAuth 2.0 Authorization Code flow with PKCE
+  (`S256`) and redirects to Keycloak's hosted login.
+- The username/password form sends credentials to the Spring backend, which
+  checks a BCrypt password hash in its user repository and returns a
+  backend-signed JWT.
 
-| Variable | Purpose |
+The Spring Boot backend validates both Keycloak access tokens and its own
+signed login tokens before allowing access to `/api/**`. `GET /api/me` returns
+the authenticated user's basic profile.
+
+## Keycloak setup
+
+Configure `ReactClient` as a public OpenID Connect client with standard flow
+enabled and these values:
+
+| Setting | Value |
 | --- | --- |
-| `AUTH_USERNAME` | Login username (defaults to `test`) |
-| `AUTH_PASSWORD` | Login password (defaults to `password`) |
-| `JWT_SECRET` | Optional signing secret, at least 32 UTF-8 bytes; generated randomly at startup when omitted |
-| `JWT_EXPIRATION_SECONDS` | Token lifetime in seconds (defaults to `3600`) |
-| `FRONTEND_ORIGIN` | Allowed browser origin (defaults to `http://localhost:3000`) |
+| Valid redirect URIs | `http://localhost:3000/*` |
+| Web origins | `http://localhost:3000` |
 
-For local development in PowerShell:
+The frontend expects Keycloak to be reachable by the browser at
+`http://localhost:8080`. Override this with `REACT_APP_KEYCLOAK_URL` if needed.
+The backend expects the realm issuer at
+`http://localhost:8080/realms/ITCJWTRealm`; override it with
+`KEYCLOAK_ISSUER_URI` if Keycloak publishes a different issuer URL. The issuer
+must exactly match the `iss` claim in Keycloak access tokens.
+
+The frontend handles passwords entered in its backend-login form, so an XSS
+vulnerability or compromised frontend dependency could capture them. The
+hosted Keycloak login keeps passwords on the Keycloak origin and is preferable
+for production. Use HTTPS outside local development.
+
+## Backend user repository
+
+The backend stores users in a file-backed H2 database and BCrypt-hashes
+passwords before storing them. At startup it seeds a bootstrap user from
+`AUTH_USERNAME` and `AUTH_PASSWORD` if that username is not already in the
+repository. The default database files are stored under `data/` and ignored by
+Git. Configure `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`
+to change the H2 database location or credentials. Set a stable `JWT_SECRET`
+if backend-issued tokens should remain valid across application restarts.
+
+For local development, the seeded default account is **admin / password**.
+These public default credentials are not safe for deployment: set unique
+`AUTH_USERNAME` and `AUTH_PASSWORD` values before starting the backend.
+
+## Run locally
+
+Keycloak uses port 8080, so the backend runs on port 8081 and the React
+development server proxies API requests to it:
 
 ```powershell
-$env:AUTH_USERNAME = "your-username"
-$env:AUTH_PASSWORD = "your-password"
-# Optional for local testing; the app generates one at startup if omitted.
-# Set a stable secret when you need tokens to remain valid across restarts.
-$env:JWT_SECRET = "replace-with-a-random-secret-of-at-least-32-bytes"
 mvn spring-boot:run
 ```
 
-With no environment variables set, the local defaults are `test` / `password`
-and a randomly generated JWT secret. That generated secret changes on every
-restart, so previously issued tokens will no longer verify.
+In another terminal:
 
-In another terminal, run the React app with `cd src/frontend; npm start`.
-The development proxy forwards `/api` requests to the backend on port 8080.
+```powershell
+cd src/frontend
+npm start
+```
 
-The login request body is `{"username":"...","password":"..."}`. Successful
-responses have the form `{"accessToken":"<jwt>"}`; invalid credentials return
-HTTP 401, missing credentials return HTTP 400, and incomplete server
-configuration returns HTTP 503. The generated secret and default credentials
-are for local development only. Set a strong password and stable, unique secret
-outside source control, and use HTTPS in deployment.
+Open `http://localhost:3000` and choose **Sign in with Keycloak** for hosted
+OAuth sign-in, or enter the backend user credentials in the form. After
+sign-in, the frontend calls `GET /api/me` with the corresponding bearer token.
+Tokens are held in memory; Keycloak tokens are refreshed before expiry, while
+backend-issued tokens expire and require signing in again. Use the exported
+`authenticatedFetch` helper in `src/frontend/src/api.js` for other
+authenticated API requests. The backend port can be changed with
+`SERVER_PORT`, and the allowed frontend origin with `FRONTEND_ORIGIN`.
 
-Run the backend BDD scenarios with `mvn test`. The authentication behavior is
-specified in `src/test/resources/features/authentication.feature` and executed
-with Cucumber step definitions.
+The backend login form posts to `POST /api/login`. Configure the bootstrap
+credentials with `AUTH_USERNAME` and `AUTH_PASSWORD`, and set a strong
+`JWT_SECRET` (at least 32 UTF-8 bytes) outside local development. The signing
+secret is generated at startup when omitted. Run backend tests with `mvn test`
+and frontend tests with `cd src/frontend; npm test`.
