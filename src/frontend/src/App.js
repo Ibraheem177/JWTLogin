@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { authenticatedFetch, login, logout, oauthLogin } from './api';
+import { authenticatedFetch, login, logout, oauthLogin, register } from './api';
 import keycloak from './keycloak';
 import './App.css';
 
@@ -8,6 +8,8 @@ function App() {
     const [username, setUsername] = useState(keycloak.tokenParsed?.preferred_username || '');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
+    const [registrationMessage, setRegistrationMessage] = useState('');
+    const [isRegistering, setIsRegistering] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isOAuthLoading, setIsOAuthLoading] = useState(false);
     const [apiStatus, setApiStatus] = useState({ loading: true, error: '', user: null });
@@ -49,8 +51,17 @@ function App() {
     const handleSubmit = async (event) => {
         event.preventDefault();
         setLoginError('');
+        setRegistrationMessage('');
         setIsLoading(true);
         try {
+            if (isRegistering) {
+                const result = await register(username, password);
+                setUsername(result.username);
+                setPassword('');
+                setIsRegistering(false);
+                setRegistrationMessage('Account created. Sign in with your new credentials.');
+                return;
+            }
             const token = await login(username, password);
             setPassword('');
             setApiStatus({ loading: true, error: '', user: null });
@@ -79,6 +90,13 @@ function App() {
         }
     };
 
+    const handleModeChange = () => {
+        setLoginError('');
+        setRegistrationMessage('');
+        setPassword('');
+        setIsRegistering(!isRegistering);
+    };
+
     return (
         <main className="login-page">
             <section className="login-card" aria-labelledby="login-title">
@@ -91,8 +109,8 @@ function App() {
 
                 <div className="login-heading">
                     <p className="eyebrow">SECURE PORTAL</p>
-                    <h1 id="login-title">{accessToken ? 'You’re signed in' : 'Welcome back'}</h1>
-                    <p className="subtitle">{accessToken ? `Welcome, ${apiStatus.user?.username || username}.` : 'Sign in to continue to your account.'}</p>
+                    <h1 id="login-title">{accessToken ? 'You’re signed in' : isRegistering ? 'Create your account' : 'Welcome back'}</h1>
+                    <p className="subtitle">{accessToken ? `Welcome, ${apiStatus.user?.username || username}.` : isRegistering ? 'Create an account to get started.' : 'Sign in to continue to your account.'}</p>
                 </div>
 
                 {accessToken ? (
@@ -107,21 +125,31 @@ function App() {
                     </>
                 ) : (
                     <>
+                        {registrationMessage && (
+                            <div className="success-message" role="status">
+                                <span className="success-icon" aria-hidden="true">✓</span>
+                                <span>{registrationMessage}</span>
+                            </div>
+                        )}
                         {loginError && (
                             <div className="error-message" role="alert">
                                 <span className="error-icon" aria-hidden="true">!</span>
                                 <span>{loginError}</span>
                             </div>
                         )}
-                        <button
-                            className="submit-button oauth-button"
-                            type="button"
-                            onClick={handleOAuthLogin}
-                            disabled={isOAuthLoading}
-                        >
-                            {isOAuthLoading ? 'Connecting to Keycloak…' : 'Sign in with Keycloak'}
-                        </button>
-                        <div className="login-divider" aria-hidden="true"><span>or</span></div>
+                        {!isRegistering && (
+                            <>
+                                <button
+                                    className="submit-button oauth-button"
+                                    type="button"
+                                    onClick={handleOAuthLogin}
+                                    disabled={isOAuthLoading}
+                                >
+                                    {isOAuthLoading ? 'Connecting to Keycloak…' : 'Sign in with Keycloak'}
+                                </button>
+                                <div className="login-divider" aria-hidden="true"><span>or</span></div>
+                            </>
+                        )}
                         <form className="login-form" onSubmit={handleSubmit}>
                         <div className="form-field">
                             <label htmlFor="username">Username</label>
@@ -143,7 +171,7 @@ function App() {
                                 id="password"
                                 name="password"
                                 type="password"
-                                autoComplete="current-password"
+                                autoComplete={isRegistering ? 'new-password' : 'current-password'}
                                 placeholder="Enter your password"
                                 value={password}
                                 onChange={(event) => setPassword(event.target.value)}
@@ -152,9 +180,12 @@ function App() {
                             />
                         </div>
                         <button className="submit-button" type="submit" disabled={isLoading}>
-                            {isLoading ? 'Signing in…' : <>Sign in <span aria-hidden="true">→</span></>}
+                            {isLoading ? isRegistering ? 'Creating account…' : 'Signing in…' : <>{isRegistering ? 'Create account' : 'Sign in'} <span aria-hidden="true">→</span></>}
                         </button>
                         </form>
+                        <button className="mode-toggle" type="button" onClick={handleModeChange} disabled={isLoading}>
+                            {isRegistering ? 'Already have an account? Sign in' : 'Create an account'}
+                        </button>
                     </>
                 )}
 

@@ -1,13 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
-import { authenticatedFetch, login, logout, oauthLogin } from './api';
+import { authenticatedFetch, login, logout, oauthLogin, register } from './api';
 import keycloak from './keycloak';
 
 jest.mock('./api', () => ({
   authenticatedFetch: jest.fn(),
   login: jest.fn(),
   logout: jest.fn(),
-  oauthLogin: jest.fn()
+  oauthLogin: jest.fn(),
+  register: jest.fn()
 }));
 
 jest.mock('./keycloak', () => ({
@@ -23,6 +24,7 @@ beforeEach(() => {
   login.mockReset();
   logout.mockReset();
   oauthLogin.mockReset();
+  register.mockReset();
   keycloak.token = '';
   keycloak.tokenParsed = null;
 });
@@ -64,6 +66,22 @@ test('authenticates the login form with Keycloak and verifies API access', async
   expect(await screen.findByText('Succeeded')).toBeInTheDocument();
   expect(login).toHaveBeenCalledWith('alex', 'secret');
   expect(authenticatedFetch).toHaveBeenCalledWith('/api/me');
+});
+
+test('registers an account and returns to sign in', async () => {
+  register.mockResolvedValue({ username: 'alex' });
+
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create an account' }));
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alex' } });
+  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
+  fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Account created. Sign in with your new credentials.'
+  );
+  expect(register).toHaveBeenCalledWith('alex', 'secret');
+  expect(screen.getByRole('button', { name: 'Sign in', exact: true })).toBeInTheDocument();
 });
 
 test('shows login errors without opening an authenticated session', async () => {

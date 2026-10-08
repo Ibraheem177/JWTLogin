@@ -36,17 +36,20 @@ for production. Use HTTPS outside local development.
 
 ## Backend user repository
 
-The backend stores users in a file-backed H2 database and BCrypt-hashes
-passwords before storing them. At startup it seeds a bootstrap user from
-`AUTH_USERNAME` and `AUTH_PASSWORD` if that username is not already in the
-repository. The default database files are stored under `data/` and ignored by
-Git. Configure `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`
-to change the H2 database location or credentials. Set a stable `JWT_SECRET`
-if backend-issued tokens should remain valid across application restarts.
+The backend stores users in PostgreSQL and BCrypt-hashes passwords before
+storing them. New users can register from the sign-in form; login looks up the
+username in this same database and verifies the submitted password against its
+BCrypt hash. The Docker initialization script inserts a default test account
+when it first creates the database; its credentials are **test / password**.
+Configure `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` to
+change the PostgreSQL connection. Set a stable `JWT_SECRET` if backend-issued
+tokens should remain valid across application restarts.
 
-For local development, the seeded default account is **admin / password**.
-These public default credentials are not safe for deployment: set unique
-`AUTH_USERNAME` and `AUTH_PASSWORD` values before starting the backend.
+The Docker Compose PostgreSQL defaults are `appdb` / `appuser` / `apppass`.
+PostgreSQL is published on host port `5434` to avoid conflicting with a local
+PostgreSQL server; the backend defaults to this port.
+The default test credentials are for local development only and are not safe
+for deployment.
 
 ## Run locally
 
@@ -54,6 +57,7 @@ Keycloak uses port 8080, so the backend runs on port 8081 and the React
 development server proxies API requests to it:
 
 ```powershell
+docker compose -f src/docker/docker-compose.yml up -d
 mvn spring-boot:run
 ```
 
@@ -73,8 +77,8 @@ backend-issued tokens expire and require signing in again. Use the exported
 authenticated API requests. The backend port can be changed with
 `SERVER_PORT`, and the allowed frontend origin with `FRONTEND_ORIGIN`.
 
-The backend login form posts to `POST /api/login`. Configure the bootstrap
-credentials with `AUTH_USERNAME` and `AUTH_PASSWORD`, and set a strong
-`JWT_SECRET` (at least 32 UTF-8 bytes) outside local development. The signing
-secret is generated at startup when omitted. Run backend tests with `mvn test`
-and frontend tests with `cd src/frontend; npm test`.
+The backend login form posts to `POST /api/login`; registration posts to
+`POST /api/register`. Set a strong `JWT_SECRET` (at least 32 UTF-8 bytes)
+outside local development. The signing secret is generated at startup when
+omitted. Run backend tests with `mvn test` and frontend tests with
+`cd src/frontend; npm test`.

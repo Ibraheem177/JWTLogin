@@ -173,6 +173,28 @@
   transition: background-color 150ms ease, transform 150ms ease;
 }
 
+.mode-toggle {
+  background: transparent;
+  border: 0;
+  color: #315ee7;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 17px;
+  padding: 8px;
+  width: 100%;
+}
+
+.mode-toggle:focus-visible {
+  outline: 3px solid rgba(76, 112, 230, 0.35);
+  outline-offset: 3px;
+}
+
+.mode-toggle:disabled {
+  cursor: wait;
+}
+
 .oauth-button {
   background: #fff;
   border: 1px solid #dce3ee;

@@ -1,0 +1,43 @@
+services:                      # list of containers you want
+  postgres:                    # a name you choose for the first container
+    image: postgres:16         # which image to download and run
+    container_name: app-postgres
+    environment:               # settings passed into the container
+      POSTGRES_DB: appdb       # database to create on first start
+      POSTGRES_USER: appuser   # username to create
+      POSTGRES_PASSWORD: apppass
+    ports:
+      - "5434:5432"            # your-computer-port : container-port
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # keep DB files in a named volume
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # run this SQL on first start
+
+  pgadmin:                     # second container: the web UI for Postgres
+    image: dpage/pgadmin4
+    container_name: app-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com   # your pgAdmin login
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"              # open pgAdmin at http://localhost:5050
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres               # start Postgres first
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: app-keycloak
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+
+volumes:                       # declares the named volume used above
+  pgdata:
+  pgadmin-data:
+  keycloak-data:

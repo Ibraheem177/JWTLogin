@@ -1,4 +1,4 @@
-import { authenticatedFetch, login, logout, oauthLogin } from './api';
+import { authenticatedFetch, login, logout, oauthLogin, register } from './api';
 
 jest.mock('./keycloak', () => ({
     __esModule: true,
@@ -54,6 +54,21 @@ test('shows the backend error for invalid credentials', async () => {
     });
 
     await expect(login('alex', 'wrong')).rejects.toThrow('Invalid username or password.');
+});
+
+test('sends new account credentials to the registration endpoint', async () => {
+    global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ username: 'alex' })
+    });
+
+    await expect(register('alex', 'secret')).resolves.toEqual({ username: 'alex' });
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'alex', password: 'secret' })
+    });
 });
 
 test('rejects protected API requests after sign out', async () => {

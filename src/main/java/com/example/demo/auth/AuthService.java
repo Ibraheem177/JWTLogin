@@ -1,8 +1,9 @@
 package com.example.demo.auth;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -50,6 +51,21 @@ public class AuthService {
         return userRepository.findByUsername(username)
                 .map(user -> passwordEncoder.matches(password, user.getPasswordHash()))
                 .orElse(false);
+    }
+
+    public boolean register(String username, String password) {
+        if (userRepository.existsByUsername(username)) {
+            return false;
+        }
+
+        String hash = passwordEncoder.encode(password);
+
+        try {
+            userRepository.saveAndFlush(new AppUser(username, hash));
+            return true;
+        } catch (DataIntegrityViolationException exception) {
+            throw exception;
+        }
     }
 
     public String createToken(String username) {
