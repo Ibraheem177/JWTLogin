@@ -1,6 +1,5 @@
-import keycloak from './keycloak';
-
 let tokenSession = null;
+const backendUrl = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8081').replace(/\/$/, '');
 
 export async function login(username, password) {
     const response = await fetch('/api/login', {
@@ -40,32 +39,22 @@ export async function register(username, password) {
 
 export function logout() {
     tokenSession = null;
-    if (keycloak.authenticated) {
-        return keycloak.logout({ redirectUri: window.location.origin });
-    }
-    return Promise.resolve();
+    return fetch('/api/logout', { method: 'POST', credentials: 'include' });
 }
 
 export function oauthLogin() {
-    return keycloak.login({ redirectUri: window.location.origin });
+    window.location.assign(`${backendUrl}/oauth2/authorization/keycloak`);
 }
 
 export async function authenticatedFetch(input, init = {}) {
-    let accessToken;
     if (tokenSession) {
         if (tokenSession.expiresAt <= Date.now()) {
             tokenSession = null;
             throw new Error('Your session has expired. Sign in again.');
         }
-        accessToken = tokenSession.accessToken;
-    } else if (keycloak.authenticated) {
-        await keycloak.updateToken(30);
-        accessToken = keycloak.token;
-    } else {
-        throw new Error('You must be signed in to access the application API.');
     }
 
     const headers = new Headers(init.headers);
-    headers.set('Authorization', `Bearer ${accessToken}`);
-    return fetch(input, { ...init, headers });
+    if (tokenSession) headers.set('Authorization', `Bearer ${tokenSession.accessToken}`);
+    return fetch(input, { ...init, headers, credentials: 'include' });
 }

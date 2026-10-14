@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { authenticatedFetch, login, logout, oauthLogin, register } from './api';
-import keycloak from './keycloak';
 import './App.css';
 
 function App() {
-    const [accessToken, setAccessToken] = useState(keycloak.token || '');
-    const [username, setUsername] = useState(keycloak.tokenParsed?.preferred_username || '');
+    const [isSignedIn, setIsSignedIn] = useState(false);
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
     const [registrationMessage, setRegistrationMessage] = useState('');
@@ -20,9 +19,6 @@ function App() {
     }
 
     useEffect(() => {
-        if (!accessToken) {
-            return undefined;
-        }
         let active = true;
         authenticatedFetch('/api/me')
             .then(async (response) => {
@@ -31,14 +27,17 @@ function App() {
                 }
                 const user = await response.json();
                 if (active) {
+                    setIsSignedIn(true);
+                    setUsername(user.username || '');
                     setApiStatus({ loading: false, error: '', user });
                 }
             })
-            .catch((error) => {
+            .catch(() => {
                 if (active) {
+                    setIsSignedIn(false);
                     setApiStatus({
                         loading: false,
-                        error: error instanceof Error ? error.message : 'Unable to reach the application API.',
+                        error: '',
                         user: null
                     });
                 }
@@ -46,7 +45,7 @@ function App() {
         return () => {
             active = false;
         };
-    }, [accessToken]);
+    }, []);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -62,10 +61,13 @@ function App() {
                 setRegistrationMessage('Account created. Sign in with your new credentials.');
                 return;
             }
-            const token = await login(username, password);
+            await login(username, password);
+            const response = await authenticatedFetch('/api/me');
+            if (!response.ok) throw new Error(`The application API returned HTTP ${response.status}.`);
+            const user = await response.json();
             setPassword('');
-            setApiStatus({ loading: true, error: '', user: null });
-            setAccessToken(token);
+            setApiStatus({ loading: false, error: '', user });
+            setIsSignedIn(true);
         } catch (error) {
             setLoginError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
         } finally {
@@ -75,7 +77,7 @@ function App() {
 
     const handleLogout = () => {
         logout();
-        setAccessToken('');
+        setIsSignedIn(false);
         setApiStatus({ loading: true, error: '', user: null });
     };
 
@@ -83,7 +85,7 @@ function App() {
         setLoginError('');
         setIsOAuthLoading(true);
         try {
-            await oauthLogin();
+            oauthLogin();
         } catch (error) {
             setLoginError(error instanceof Error ? error.message : 'Unable to connect to Keycloak.');
             setIsOAuthLoading(false);
@@ -109,11 +111,11 @@ function App() {
 
                 <div className="login-heading">
                     <p className="eyebrow">SECURE PORTAL</p>
-                    <h1 id="login-title">{accessToken ? 'You’re signed in' : isRegistering ? 'Create your account' : 'Welcome back'}</h1>
-                    <p className="subtitle">{accessToken ? `Welcome, ${apiStatus.user?.username || username}.` : isRegistering ? 'Create an account to get started.' : 'Sign in to continue to your account.'}</p>
+                <h1 id="login-title">{isSignedIn ? 'You’re signed in' : isRegistering ? 'Create your account' : 'Welcome back'}</h1>
+                    <p className="subtitle">{isSignedIn ? `Welcome, ${apiStatus.user?.username || username}.` : isRegistering ? 'Create an account to get started.' : 'Sign in to continue to your account.'}</p>
                 </div>
 
-                {accessToken ? (
+                {isSignedIn ? (
                     <>
                         <div className={apiStatus.error ? 'error-message' : 'success-message'} role={apiStatus.error ? 'alert' : 'status'}>
                             <span className={apiStatus.error ? 'error-icon' : 'success-icon'} aria-hidden="true">
